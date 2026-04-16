@@ -8,6 +8,9 @@ This repository serves as the implementation and execution plane for the **Seman
 - **Integration Logic**: Managing the bridge between on-chain data and the semantic protocol.
 - **Executable Tests**: Maintaining the suite of runtime and integration tests.
 
+## Key Documents
+- `RESEARCH_PROPOSAL.md`: The foundational research framing and methodology.
+
 ## Structure
 - `programs/`: Rust Solana program code.
 - `clients/`: TypeScript client and interaction logic.
@@ -24,6 +27,6 @@ This repository serves as the implementation and execution plane for the **Seman
 
 ## Quick Start
 ```bash
-python3 src/runtime/semantic_protocol_runtime.py init
+# Use the SPR runtime to run a protocol example
 python3 src/runtime/semantic_protocol_runtime.py run src/runtime/examples/demo.spr
 ```
