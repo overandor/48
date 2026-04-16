@@ -1,298 +1,390 @@
-# Semantic Protocol Runtime Prototype
+# Research Proposal: Semantic Protocol Runtime for Multi-Runtime Program Authoring
 
-This is a single-file prototype of the system discussed in chat:
-a semantic protocol language with typed intent, explicit effects,
-policy constraints, automatic lowering, and bounded LLM-assisted runtime choice.
+## Title
 
-## Main file
-- `semantic_protocol_runtime.py`
+**Semantic Protocol Runtime: A Terminal-Native System for Authoring Typed Intent and Automatically Lowering It Across Multiple Execution Runtimes**
 
-## Demo
-- `examples/demo.spr`
+## Abstract
 
-## Quick start
-```bash
-python semantic_protocol_runtime.py init
-python semantic_protocol_runtime.py explain examples/demo.spr
-python semantic_protocol_runtime.py compile examples/demo.spr --out build
-python semantic_protocol_runtime.py run examples/demo.spr --dry-run
-python semantic_protocol_runtime.py run examples/demo.spr
-```
+Modern software systems are increasingly assembled from multiple languages and runtimes such as Python, SQL, shell, JavaScript, HTTP APIs, workflow engines, and cloud services. This fragmentation creates large amounts of glue code, weak observability, brittle orchestration, and unnecessary cognitive overhead. This proposal studies a new programming model in which developers author a single semantic protocol artifact that expresses typed intent, effects, policies, capabilities, and optimization priorities, while a planning and lowering system compiles fragments of that artifact into the most appropriate target runtimes.
 
-## One-line core idea
+The proposed prototype, the **Semantic Protocol Runtime**, treats source code as an executable protocol rather than language-bound syntax. A user writes a compact, terminal-native semantic language with explicit effect markers and resource bindings. The system parses the artifact into an intermediate representation, constructs dependency and effect graphs, applies capability and policy verification, selects legal implementation targets, lowers subgraphs into concrete backends such as SQL and Python, and executes the resulting unified plan. A local Hugging Face Transformers model may optionally assist in runtime selection or bounded inference, but the semantic representation remains the source of truth.
 
-A **terminal-native semantic protocol language** where the user writes **typed intent** instead of language-specific code, and the system automatically **lowers fragments into the best runtime or programming language** under explicit policy, capability, and verification constraints.
+This research investigates whether such a system can reduce glue code, improve runtime placement, and preserve developer trust through explicit policies and inspectable execution plans.
 
-## What the invention is
+## Problem Statement
 
-This is **not** ordinary polyglot programming and **not** just putting Python, SQL, and Bash in one file.
+Current programming workflows are shaped by language-specific authoring rather than by semantic intent. Developers commonly express a single end-to-end task using multiple artifacts:
 
-It is a shift from:
+- shell commands for orchestration,
+- Python for transformation logic,
+- SQL for pushdown into data stores,
+- HTTP clients for APIs,
+- configuration files for workflow behavior,
+- ad hoc scripts for effects such as notifications or exports.
 
-* code as syntax
+This model has several costs:
 
-to:
+1. **Fragmented meaning**
+   A single operation is spread across files, runtimes, and configuration layers.
 
-* code as executable protocol
+2. **Manual runtime choice**
+   Developers must decide by hand what should execute in SQL, what should execute in Python, and what should be handled by orchestration code.
 
-The source file becomes a **semantic artifact** that declares:
+3. **Unsafe or implicit side effects**
+   File writes, network calls, shell access, and notifications are often hidden inside code paths rather than declared explicitly.
 
-* values
-* transforms
-* effects
-* types
-* constraints
-* capabilities
-* policies
-* optimization priorities
+4. **Poor inspectability**
+   It is hard to ask, before execution, “what exactly will run where?”
 
-The system then:
+5. **High glue-code burden**
+   Significant engineering time is spent on connectors, adapters, wrappers, and repeated orchestration logic rather than on core semantics.
 
-1. parses that artifact into a semantic representation,
-2. builds intent, dependency, and effect graphs,
-3. chooses target runtimes or languages,
-4. lowers fragments into executable implementations,
-5. verifies that the lowered program still matches declared meaning,
-6. executes the unified plan.
+The research question is whether a **single semantic protocol file** can serve as the authoritative source for execution while the system automatically selects and lowers fragments into appropriate runtimes under explicit constraints.
 
-## What is actually novel
+## Core Hypothesis
 
-The novelty is **not** in any single component by itself.
+A typed semantic protocol language with explicit effects, capability policies, and bounded runtime lowering can:
 
-Individual pieces already exist in different forms:
+- reduce cross-language glue code,
+- improve execution placement,
+- preserve developer trust through inspectable plans,
+- and provide a practical terminal-native authoring model for multi-runtime workflows.
 
-* intermediate representations
-* workflow systems
-* code generation
-* query planning
-* LLM-assisted coding
-* formal verification
+## Research Objectives
 
-The likely novelty is the **integration** of these into one authoring and execution model:
+The project has six core objectives.
 
-* one semantic protocol artifact
-* typed intent/effect graph
-* automatic multi-runtime lowering
-* bounded LLM assistance
-* explicit side-effect and capability policy
-* explainable terminal-native planning and execution
+### Objective 1: Define a semantic authoring surface
 
-That is the strongest framing.
+Design a compact protocol language in which symbols and tokens represent execution semantics rather than the syntax of any single programming language.
 
-## Strongest technical thesis
+### Objective 2: Separate meaning from lowering
 
-Programming should move from writing implementation-shaped syntax for a single runtime to writing **typed executable intent** that can be safely lowered across multiple runtimes and languages.
+Implement a compiler pipeline in which source artifacts are parsed into a semantic intermediate representation before any target language is chosen.
 
-## Core design principles
+### Objective 3: Make side effects explicit
 
-### 1. Meaning first, syntax second
+Represent writes, notifications, network access, and other external actions as first-class effect nodes with declared capabilities.
 
-The file expresses what must happen, not how a specific language spells it.
+### Objective 4: Support mixed lowering
 
-### 2. Semantic tokens, not language-owned tokens
+Allow different fragments of a single semantic program to be lowered into different runtimes, such as SQL pushdown for filtering and projection and Python for orchestration or custom mapping.
 
-Symbols like `->`, `!`, `@`, `:`, `?`, `|`, `~`, `#` become part of a canonical semantic grammar.
+### Objective 5: Bound LLM involvement
 
-### 3. Mixed lowering, not mixed syntax
+Use an optional local Hugging Face model only for constrained ranking or inference tasks. The LLM must not invent program meaning.
 
-A single line may lower partly to SQL, partly to Python, partly to shell, partly to an API call.
+### Objective 6: Evaluate usefulness
 
-### 4. LLM chooses implementation, not meaning
+Measure whether the system improves brevity, inspectability, and execution planning relative to a comparable manually assembled baseline.
 
-The LLM must operate inside a typed constrained framework. It can select legal lowerings, but it should not invent semantics.
+## Proposed System
 
-### 5. Effects must be explicit
+The proposed system is a prototype called **Semantic Protocol Runtime**. It is terminal-native and single-file by default.
 
-External actions like file writes, network calls, notifications, shell access, database mutation, and execution privileges must be visible in the source.
+### Authoring model
 
-### 6. The terminal becomes a planning environment
-
-The terminal is not just where code runs. It becomes where the user:
-
-* loads protocol files,
-* inspects lowerings,
-* pins targets,
-* runs dry runs,
-* executes live plans.
-
-## Example semantic model
-
-Instead of:
-
-* Python for orchestration
-* SQL for filtering
-* shell for execution
-* JS for glue
-
-you might write:
+Instead of writing multiple files in multiple languages, a user writes a semantic artifact such as:
 
 ```text
-users := source @postgres "users"
-active := users -> where status="active"
-emails := active -> project [email]
-send! emails @smtp
+policy {
+  optimize: latency > cost
+  deterministic: true
+  allow database[db.main]
+  allow filesystem[*]
+  allow network[slack.ops]
+  deny shell[*]
+}
+
+users := source @db.main "select id, email, score from users"
+hot   := users -> filter score > 0.8 -> project [id, email, score]
+write! hot @file:"hot_users.jsonl"
+notify! hot @slack.ops:"#risk"
 ```
 
-This is not Python or SQL.
+This artifact declares:
 
-It is a semantic protocol that may lower as:
+- source location,
+- transformation semantics,
+- effects,
+- capability policy,
+- optimization preference.
 
-* SQL for `where` and `project`
-* Python or Go for orchestration
-* SMTP client logic for `send!`
+It does not require the user to manually choose a separate source language for each fragment.
 
-## Example operator set
+### Key semantic operators
 
-Possible canonical operators:
+The prototype uses a small set of canonical operators:
 
-* `:=` bind value
-* `->` pure transform
-* `!` side effect
-* `@` runtime or resource binding
-* `:` type or refinement
-* `?` unresolved or inferable field
-* `|` pipeline or fallback
-* `#` planner hint
-* `~` approximate or heuristic lowering
-* `&` dependency join
+- `:=` bind a value or stream
+- `->` pure transform
+- `!` explicit effect
+- `@` runtime or resource binding
+- `:` type or refinement
+- `?` unresolved or inferable parameter
+- `|` pipeline or fallback
+- `~` approximate or heuristic execution
+- `#` planner hint
 
-These operators belong to the protocol language, not to Python, Rust, Bash, or SQL.
+These symbols are interpreted by the semantic runtime, not by Python, SQL, or shell parsers.
 
-## Architecture
+## System Architecture
 
-The system likely contains:
+The prototype architecture consists of the following layers:
 
-* semantic parser
-* canonical grammar
-* typed intermediate representation
-* intent graph builder
-* effect graph builder
-* dependency graph builder
-* capability and policy checker
-* target planner and cost model
-* lowering engine
-* LLM-assisted inference module
-* equivalence validator
-* execution runtime
-* terminal inspection interface
+1. **Parser**
+   Parses semantic source files into a structured program representation.
 
-## Execution pipeline
+2. **Intermediate representation**
+   Stores bindings, transforms, effects, and policies in a typed-ish internal model.
 
-A representative pipeline is:
+3. **Graph builder**
+   Builds dependency and effect graphs for execution ordering and static reasoning.
 
-1. receive semantic protocol source,
-2. parse into semantic tokens and structures,
-3. build typed intent graph,
-4. build effect/dependency graph,
-5. enforce capability and optimization policies,
-6. propose candidate lowerings,
-7. rank or select lowerings,
-8. generate executable code/actions,
-9. validate semantic equivalence,
-10. execute and record trace/replay metadata.
+4. **Policy verifier**
+   Enforces declared capabilities such as allowed databases, filesystems, and network targets.
 
-## Main advantages
+5. **Planner**
+   Selects legal lowerings for each transform and effect using a deterministic cost model with optional bounded LLM ranking.
 
-If it works well, this system could:
+6. **Lowerers**
+   Convert semantic fragments into concrete target code or operations. The first prototype includes:
+   - SQL lowering for source-side filtering/projecting/grouping,
+   - Python lowering for orchestration and runtime execution.
 
-* reduce glue code,
-* unify cross-runtime workflows,
-* push work to the best execution target,
-* preserve a single source of semantic truth,
-* improve explainability of execution planning,
-* make LLM-assisted codegen safer,
-* support deterministic replay and policy control.
+7. **Runtime**
+   Executes the plan and records outputs.
 
-## Best mental model
+8. **Terminal interface**
+   Supports parsing, explaining, compiling, running, and interactive inspection.
 
-The best analogy is:
+## Methodology
 
-**query planning for all programming**
+The project will proceed in five phases.
 
-In SQL, a user declares intent and the engine decides execution strategy.
+### Phase 1: Language design
 
-This idea extends that pattern beyond databases to:
+Define a minimal grammar sufficient for:
+- sources,
+- pure transforms,
+- effects,
+- policy rules,
+- runtime hints.
 
-* shell
-* Python
-* SQL
-* APIs
-* workflows
-* distributed runtimes
-* GPU or compiled targets
+### Phase 2: IR and verification
 
-## The biggest risk
+Represent semantic programs as a graph of bindings and effects. Enforce:
+- deterministic mode constraints,
+- allowed capabilities,
+- simple dependency correctness,
+- effect visibility.
 
-The biggest failure mode is not competition. It is ambiguity.
+### Phase 3: Lowering
 
-If the system becomes:
+Implement initial lowerers:
+- SQL for pushdown-eligible transformations,
+- Python for execution and orchestration.
 
-* vague,
-* nondeterministic,
-* hard to inspect,
-* hard to trust,
+### Phase 4: Optional bounded LLM assistance
 
-then developers will reject it.
+Add a local Transformers adapter for:
+- ranking legal runtime candidates,
+- optional metadata completion,
+- explanation support.
 
-So the source language must be:
+This LLM is advisory only. It may never override policy or create new semantics.
 
-* strict enough to execute,
-* constrained enough to verify,
-* explicit enough to audit,
-* flexible enough to optimize.
+### Phase 5: Evaluation
 
-## Honest business assessment
+Run benchmark tasks comparing:
+- semantic protocol authoring,
+- conventional multi-file glue-code implementations.
 
-The concept is strong, but the value depends on execution.
+## Evaluation Plan
 
-### Likely true
+The evaluation will focus on four criteria.
 
-* The framing is timely.
-* The integration is interesting.
-* The idea has plausible patent potential if claims are tight.
-* The market could be meaningful in data, ops, workflows, and infra.
+### 1. Authoring efficiency
 
-### Not yet proven
+Measure:
+- lines of source required,
+- number of files required,
+- time to complete representative tasks.
 
-* That developers will adopt it.
-* That it is faster or safer than existing glue code.
-* That the planner/verifier stack can be made reliable.
-* That it can win against incumbents if the wedge is too broad.
+### 2. Execution quality
 
-## Best initial wedge
+Measure:
+- whether pushdown opportunities are captured,
+- whether generated plans are valid,
+- whether outputs match expected results.
 
-The strongest first market is probably:
+### 3. Trust and inspectability
 
-**terminal-native cross-runtime automation for Bash + Python + SQL + API glue workflows**
+Measure:
+- ability to explain execution plans,
+- clarity of visible side effects,
+- ease of understanding runtime placement before execution.
 
-That is a real pain point with measurable ROI.
+### 4. Robustness
 
-## Best V1 scope
+Measure:
+- policy enforcement behavior,
+- failure handling,
+- reproducibility of compiled plans.
 
-A realistic first version should be narrow:
+## Example Tasks for Evaluation
 
-* terminal-first
-* dataflow style
-* explicit effects
-* deterministic IR
-* 10–15 core operators
-* only a few targets:
+Initial benchmarks will include:
 
-  * Python
-  * SQL
-  * shell
-  * HTTP/API
+1. **Database filter and export**
+   - Read from a database
+   - Filter rows
+   - Project fields
+   - Write to a file
 
-That is enough to prove the model.
+2. **Grouping and aggregation**
+   - Group records
+   - Compute aggregate values
+   - Export results
 
-## Patent-strength framing
+3. **Transformation plus effect**
+   - Apply a Python-side transformation
+   - Trigger a notification
 
-The strongest patent framing is:
+4. **Policy-constrained execution**
+   - Attempt a denied capability
+   - Confirm the verifier blocks execution
 
-**authoring software as a typed semantic protocol that is automatically lowered across multiple languages and runtimes under verified policy and optimization control**
+## Expected Contributions
 
-That is stronger than saying “multiple languages in one file.”
+This work aims to contribute:
 
-## Concise patent-style invention summary
+- a concrete prototype for semantic protocol programming,
+- a design pattern for explicit effect-first authoring,
+- a bounded model for LLM-assisted lowering,
+- an evaluation of whether a terminal-native semantic system can replace common glue workflows.
 
-A computer-implemented programming system in which a user authors a single semantic protocol artifact independent of any single implementation language, the system parses the artifact into a typed intent and effect representation, selects one or more target runtimes or programming languages for different fragments, lowers those fragments into executable forms, validates compliance with declared semantics and policy constraints, and executes the resulting plan as a unified program.
+## Novelty and Positioning
+
+The project does not claim that every component is unprecedented in isolation. Related ideas exist across:
+
+- intermediate representations,
+- workflow systems,
+- query planners,
+- code generation,
+- formal verification,
+- LLM-assisted coding.
+
+The proposed novelty lies in the integration of these ideas into one authoring and execution surface:
+
+- one semantic artifact,
+- one policy model,
+- one inspectable plan,
+- many possible lowerings.
+
+In this framing, languages become backends rather than authoring environments.
+
+## Risks
+
+The main risks are:
+
+### Ambiguity risk
+If the semantic language is too loose, the system becomes untrustworthy.
+
+### Overreach risk
+If too many runtimes or operators are introduced too early, the prototype becomes difficult to reason about.
+
+### Verification risk
+Formal correctness beyond a narrow scope is difficult. Early versions should prioritize practical policy checks and explainable planning.
+
+### Adoption risk
+Developers may resist a new abstraction layer unless the benefits are immediate and obvious.
+
+## Risk Mitigation
+
+To reduce these risks, the research will:
+
+- keep the initial grammar small,
+- make all effects explicit,
+- treat the LLM as optional and bounded,
+- provide explain and dry-run modes,
+- start with a narrow workflow-focused use case.
+
+## Deliverables
+
+Planned deliverables include:
+
+1. A single-file runnable prototype runtime
+2. A semantic protocol grammar and examples
+3. A planner and verifier
+4. SQL and Python lowerers
+5. A terminal CLI and REPL
+6. A small benchmark suite
+7. A comparative evaluation report
+8. A roadmap for expanded runtimes and stronger verification
+
+## Timeline
+
+### Weeks 1–2
+- finalize minimal grammar
+- parser and IR
+- simple verifier
+
+### Weeks 3–4
+- planner
+- SQL lowering
+- Python lowering
+- CLI explain and compile paths
+
+### Weeks 5–6
+- evaluation tasks
+- bounded local LLM integration
+- dry-run and inspectability improvements
+
+### Weeks 7–8
+- benchmark comparisons
+- write-up and next-stage architecture
+
+## Success Criteria
+
+The project will be considered successful if it demonstrates that:
+
+- a single semantic protocol file can replace a multi-file glue workflow,
+- runtime placement can be automatically selected for at least a small set of operations,
+- side effects and capability policies remain inspectable and enforceable,
+- local LLM assistance improves ergonomics without weakening determinism or trust.
+
+## Broader Impact
+
+If successful, this work could influence:
+
+- data engineering workflows,
+- DevOps and infrastructure automation,
+- API orchestration systems,
+- agent runtimes,
+- future language design centered on semantics rather than syntax.
+
+The broader thesis is that developers should author **meaning**, while runtimes and compilers determine **realization**.
+
+## Current Prototype Status
+
+A first prototype has already been implemented in this repository. It includes:
+
+- semantic parsing,
+- a typed internal representation,
+- graph construction,
+- policy verification,
+- deterministic planning,
+- SQL and Python lowering,
+- local Hugging Face LLM adapter support,
+- CLI and REPL entry points,
+- a demo semantic protocol program.
+
+This proposal therefore supports an active prototype research program rather than a purely speculative concept.
+
+## Conclusion
+
+This research explores a practical rethinking of terminal programming as semantic protocol authoring. The central claim is that a single protocol artifact can express typed intent, explicit effects, and policy constraints, while a planner and lowering system safely realize that intent across multiple languages and runtimes.
+
+The immediate goal is not a universal language replacement. It is a narrow, credible demonstration that semantic authoring can reduce glue code and improve execution planning for real workflows. If the prototype succeeds in that wedge, it may provide the foundation for a broader class of multi-runtime semantic programming systems.
