@@ -1,0 +1,19 @@
+name: Runtime Validation
+on:
+  push:
+    branches: [ runtime ] # Triggered in Repo 48
+jobs:
+  test-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Run Solana Tests
+        run: cargo test --manifest-path programs/solana_dex/Cargo.toml
+      - name: Validate Against Control Plane
+        run: |
+          # Ensure runtime implementation conforms to latest control plane schemas
+          python3 scripts/check_contract_conformity.py --contracts ./contracts

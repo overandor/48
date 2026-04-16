@@ -223,6 +223,18 @@ class RuntimeBinding:
 @dataclass
 class TypeRef:
     raw: str
+    base: str = "any"
+    params: List[TypeRef] = field(default_factory=list)
+
+    @classmethod
+    def from_string(cls, text: str) -> TypeRef:
+        text = text.strip()
+        if "[" in text and text.endswith("]"):
+            base = text[:text.find("[")]
+            inner = text[text.find("[")+1:-1]
+            params = [cls.from_string(p) for p in split_csv_like(inner)]
+            return cls(raw=text, base=base, params=params)
+        return cls(raw=text, base=text)
 
 
 @dataclass
@@ -250,6 +262,7 @@ class Binding:
     input_name: Optional[str] = None
     declared_type: Optional[TypeRef] = None
     ops: List[TransformOp] = field(default_factory=list)
+    runtime_hint: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -258,6 +271,7 @@ class Binding:
             "input_name": self.input_name,
             "declared_type": dataclasses.asdict(self.declared_type) if self.declared_type else None,
             "ops": [op.to_dict() for op in self.ops],
+            "runtime_hint": self.runtime_hint,
         }
 
 
@@ -300,8 +314,7 @@ class Program:
 
 class ProgramParser:
     POLICY_RE = re.compile(r"^\s*policy\s*\{\s*$")
-    BIND_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*([^=]+?))?\s*:=\s*(.+)$")
-    BIND_EQ_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*([^=]+?))?\s*=\s*(.+)$")
+    BIND_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*([^=@:=]+?))?\s*(?:@([A-Za-z_][A-Za-z0-9_]*))?\s*(?::=|=)\s*(.+)$")
     EFFECT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)!\s+([A-Za-z_][A-Za-z0-9_]*)\s+(.+)$")
     SOURCE_RE = re.compile(r'^\s*source\s+@([A-Za-z0-9_\.\-:]+)\s+(".*"|[\'.*\'])\s*$')
 
@@ -330,10 +343,10 @@ class ProgramParser:
                 prog.effects.append(self._parse_effect(effect_name, input_name, rest, raw))
                 i += 1
                 continue
-            bind_m = self.BIND_RE.match(raw) or self.BIND_EQ_RE.match(raw)
+            bind_m = self.BIND_RE.match(raw)
             if bind_m:
-                name, declared_type, rhs = bind_m.groups()
-                prog.bindings.append(self._parse_binding(name, declared_type, rhs))
+                name, declared_type, runtime_hint, rhs = bind_m.groups()
+                prog.bindings.append(self._parse_binding(name, declared_type, rhs, runtime_hint))
                 i += 1
                 continue
             raise ParseError(f"Cannot parse line {i + 1}: {raw}")
@@ -416,8 +429,8 @@ class ProgramParser:
                 args[p] = True
         return Effect(effect_name=effect_name, input_name=input_name, binding=RuntimeBinding(kind=kind, target=target), args=args, raw=raw)
 
-    def _parse_binding(self, name: str, declared_type: Optional[str], rhs: str) -> Binding:
-        declared = TypeRef(declared_type.strip()) if declared_type else None
+    def _parse_binding(self, name: str, declared_type: Optional[str], rhs: str, runtime_hint: Optional[str] = None) -> Binding:
+        declared = TypeRef.from_string(declared_type) if declared_type else None
         source_m = self.SOURCE_RE.match(rhs)
         if source_m:
             runtime, payload = source_m.groups()
@@ -426,7 +439,33 @@ class ProgramParser:
                 declared_type=declared,
                 source=SourceSpec(runtime=runtime, payload=ast.literal_eval(payload)),
                 ops=[],
+                runtime_hint=runtime_hint,
             )
+
+        # Handle & (join) and | (fallback/alternative pipeline)
+        # For simplicity in this prototype, we'll treat them as special ops if they appear
+
+        if " & " in rhs:
+            parts = [p.strip() for p in rhs.split(" & ")]
+            return Binding(
+                name=name,
+                input_name=parts[0],
+                declared_type=declared,
+                ops=[TransformOp("join", {"with": parts[1:]})],
+                runtime_hint=runtime_hint,
+            )
+
+        if " | " in rhs:
+            parts = [p.strip() for p in rhs.split(" | ")]
+            # If it's a fallback, we can model it as an op
+            return Binding(
+                name=name,
+                input_name=parts[0],
+                declared_type=declared,
+                ops=[TransformOp("fallback", {"alternatives": parts[1:]})],
+                runtime_hint=runtime_hint,
+            )
+
         segments = [seg.strip() for seg in rhs.split("->")]
         if not segments:
             raise ParseError(f"Invalid binding for {name}")
@@ -434,7 +473,7 @@ class ProgramParser:
         ops: List[TransformOp] = []
         for seg in segments[1:]:
             ops.append(self._parse_transform(seg))
-        return Binding(name=name, input_name=input_name, declared_type=declared, ops=ops)
+        return Binding(name=name, input_name=input_name, declared_type=declared, ops=ops, runtime_hint=runtime_hint)
 
     def _parse_transform(self, seg: str) -> TransformOp:
         seg = seg.strip()
@@ -547,6 +586,13 @@ class GraphBuilder:
             deps: List[str] = []
             if b.input_name:
                 deps.append(f"binding:{b.input_name}")
+            for op in b.ops:
+                if op.name == "join":
+                    for other in op.args.get("with", []):
+                        deps.append(f"binding:{other}")
+                elif op.name == "fallback":
+                    for other in op.args.get("alternatives", []):
+                        deps.append(f"binding:{other}")
             nodes.append(GraphNode(id=f"binding:{b.name}", kind="binding", ref_name=b.name, payload=b.to_dict(), deps=deps))
         for idx, e in enumerate(prog.effects):
             nodes.append(GraphNode(
@@ -733,6 +779,14 @@ class Planner:
                 candidates = self.cost_model.rank_transform(binding, op, source_runtime)
                 chosen = self.llm.suggest_runtime(op, candidates, {"binding": binding.name, "policy": prog.policy.to_dict()}) if self.llm.enabled() else None
                 runtime = chosen if chosen in candidates else self.cost_model.choose(candidates)
+
+                # Use binding-level runtime hint if it matches candidates
+                if binding.runtime_hint:
+                    for c in candidates:
+                        if c.startswith(binding.runtime_hint):
+                            runtime = c
+                            break
+
                 steps.append(LoweredStep(
                     step_id=f"step:{binding.name}:{idx}",
                     binding_name=binding.name,
@@ -756,16 +810,29 @@ class Planner:
 
 
 class SQLLowerer:
-    def lower_binding_to_sql(self, binding: Binding) -> str:
-        if not binding.source or not binding.source.runtime.startswith("db"):
-            raise PlanningError(f"Cannot SQL-lower binding without db source: {binding.name}")
-        sql = binding.source.payload.strip().rstrip(";")
+    def lower_binding_to_sql(self, binding: Binding, binding_map: Dict[str, Binding] = None) -> str:
+        if not binding.source and not binding.input_name:
+             raise PlanningError(f"Cannot SQL-lower binding without source or input: {binding.name}")
+
+        if binding.source:
+            if not binding.source.runtime.startswith("db"):
+                raise PlanningError(f"Cannot SQL-lower non-db source: {binding.source.runtime}")
+            sql = binding.source.payload.strip().rstrip(";")
+            base_table = f"({sql}) AS _spr_base_{binding.name}"
+        else:
+            # Try to recursively lower input
+            if not binding_map or binding.input_name not in binding_map:
+                raise PlanningError(f"Missing binding map or input for {binding.name}")
+            input_sql = self.lower_binding_to_sql(binding_map[binding.input_name], binding_map)
+            base_table = f"({input_sql.rstrip(';')}) AS _spr_base_{binding.name}"
+
         select_fields: Optional[List[str]] = None
         where_clauses: List[str] = []
         group_clause: Optional[str] = None
         sum_clause: Optional[str] = None
         order_clause: Optional[str] = None
         limit_clause: Optional[int] = None
+
         for op in binding.ops:
             if op.name == "filter":
                 where_clauses.append(op.args["predicate"])
@@ -779,14 +846,24 @@ class SQLLowerer:
                 order_clause = op.args["expr"]
             elif op.name == "limit":
                 limit_clause = int(op.args["n"])
+            elif op.name == "join":
+                # Basic JOIN support
+                with_bindings = op.args["with"]
+                for other_name in with_bindings:
+                    if not binding_map or other_name not in binding_map:
+                         raise PlanningError(f"Join target {other_name} not found")
+                    other_sql = self.lower_binding_to_sql(binding_map[other_name], binding_map)
+                    base_table += f" JOIN ({other_sql.rstrip(';')}) AS _spr_join_{other_name} ON 1=1" # Dummy ON, should be refined
             else:
                 raise PlanningError(f"Binding {binding.name} has op not safely lowerable to SQL: {op.name}")
+
         outer_select = "*"
         if select_fields:
             outer_select = ", ".join(select_fields)
         if group_clause and sum_clause:
             outer_select = f"{group_clause}, SUM({sum_clause}) AS sum_{sum_clause}"
-        out = f"SELECT {outer_select} FROM ({sql}) AS _spr_base"
+
+        out = f"SELECT {outer_select} FROM {base_table}"
         if where_clauses:
             out += " WHERE " + " AND ".join(f"({x})" for x in where_clauses)
         if group_clause:
@@ -804,6 +881,13 @@ import json
 import sqlite3
 import pathlib
 from typing import Any, Dict, List
+
+def _spr_join(left: List[Dict[str, Any]], right: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for l in left:
+        for r in right:
+            out.append({**l, **r})
+    return out
 
 def _spr_fetch_db_rows(db_path: str, query: str) -> List[Dict[str, Any]]:
     conn = sqlite3.connect(db_path)
@@ -864,23 +948,42 @@ DATA = {}
         lines = [self.PRELUDE.strip(), ""]
         sql_lowerer = SQLLowerer()
         sql_cache: Dict[str, str] = {}
+        binding_map = prog.binding_map()
+
+        def can_push_sql(name):
+            b = binding_map.get(name)
+            if not b: return False
+            if b.source: return b.source.runtime.startswith("db")
+            if b.input_name:
+                if not can_push_sql(b.input_name): return False
+                for op in b.ops:
+                    if op.name not in {"filter", "project", "group", "sum", "sort", "limit", "join"}:
+                        return False
+                    if op.name == "join":
+                        for other in op.args.get("with", []):
+                            if not can_push_sql(other): return False
+                return True
+            return False
+
         for b in prog.bindings:
-            sql_only = bool(b.source and b.source.runtime.startswith("db") and all(op.name in {"filter", "project", "group", "sum", "sort", "limit"} for op in b.ops))
-            if sql_only and b.ops:
+            if b.ops and can_push_sql(b.name):
                 try:
-                    sql_cache[b.name] = sql_lowerer.lower_binding_to_sql(b)
+                    sql_cache[b.name] = sql_lowerer.lower_binding_to_sql(b, binding_map)
                 except Exception:
                     pass
         for b in prog.bindings:
+            if b.name in sql_cache:
+                lines.append(f'DATA[{json.dumps(b.name)}] = _spr_fetch_db_rows("spr_demo.db", {json.dumps(sql_cache[b.name])})')
+                continue
+
             if b.source:
-                if b.name in sql_cache:
-                    lines.append(f'DATA[{json.dumps(b.name)}] = _spr_fetch_db_rows("spr_demo.db", {json.dumps(sql_cache[b.name])})')
-                elif b.source.runtime.startswith("db"):
+                if b.source.runtime.startswith("db"):
                     lines.append(f'DATA[{json.dumps(b.name)}] = _spr_fetch_db_rows("spr_demo.db", {json.dumps(b.source.payload)})')
                 else:
                     lines.append(f'DATA[{json.dumps(b.name)}] = []')
             elif b.input_name:
-                lines.append(f'DATA[{json.dumps(b.name)}] = list(DATA[{json.dumps(b.input_name)}])')
+                lines.append(f'DATA[{json.dumps(b.name)}] = list(DATA.get({json.dumps(b.input_name)}, []))')
+
             if b.name not in sql_cache:
                 group_field = None
                 pending_sum = None
@@ -901,6 +1004,13 @@ DATA = {}
                         group_field = op.args["field"]
                     elif op.name == "sum":
                         pending_sum = op.args["field"]
+                    elif op.name == "join":
+                        for other in op.args.get("with", []):
+                            lines.append(f'DATA[{json.dumps(b.name)}] = _spr_join(DATA[{json.dumps(b.name)}], DATA.get({json.dumps(other)}, []))')
+                    elif op.name == "fallback":
+                        alt_names = op.args["alternatives"]
+                        for alt in alt_names:
+                            lines.append(f'if not DATA[{json.dumps(b.name)}]: DATA[{json.dumps(b.name)}] = DATA.get({json.dumps(alt)}, [])')
                     elif op.name in {"custom", "python"}:
                         lines.append(f'DATA[{json.dumps(b.name)}] = _spr_map(DATA[{json.dumps(b.name)}], {json.dumps(op.args["expr"])})')
                 if group_field and pending_sum:
@@ -1024,6 +1134,16 @@ class Runner:
                 (4, "d@example.com", 0.45),
             ]
             conn.executemany("insert into users values (?, ?, ?)", rows)
+
+            conn.execute("create table if not exists profiles (user_id integer, bio text)")
+            conn.execute("delete from profiles")
+            profiles = [
+                (1, "Engineer"),
+                (2, "Designer"),
+                (3, "Scientist"),
+            ]
+            conn.executemany("insert into profiles values (?, ?)", profiles)
+
             conn.commit()
         finally:
             conn.close()
@@ -1166,4 +1286,4 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
