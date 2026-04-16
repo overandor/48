@@ -1,0 +1,15 @@
+policy {
+  allow database[*]
+  allow filesystem[*]
+}
+
+users := source @db.main "select id, email from users"
+profiles := source @db.main "select user_id, bio from profiles"
+
+# Join operator
+enriched := users & profiles
+
+# Fallback operator
+final_data := enriched | users
+
+write! final_data @file:"final.jsonl"
