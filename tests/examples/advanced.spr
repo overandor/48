@@ -1,0 +1,15 @@
+policy {
+  allow database[*]
+}
+
+# Type annotations and SQL pushdown
+users : List[User] := source @db.main "select * from users"
+
+# Multi-step pushdown
+filtered := users -> filter score > 0.5
+projected := filtered -> project [id, email]
+
+# Manual hint
+final @python := projected -> map "row['email'].upper()" #hint: local process only
+
+write! final @file:"final.jsonl"
