@@ -1,0 +1,20 @@
+name: Cross-Repo Synchronization
+on:
+  push:
+    branches: [ control ] # Triggered in Repo 47
+jobs:
+  validate-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Runtime Plane (Repo 48)
+        uses: actions/checkout@v4
+        with:
+          repository: overandor/48
+          ref: runtime
+      - name: Fetch Control Plane Specs
+        run: |
+          curl -O https://raw.githubusercontent.com/overandor/47/control/specs/protocol.md
+          curl -O https://raw.githubusercontent.com/overandor/47/control/contracts/manifest.json
+      - name: Run Compatibility Checks
+        run: |
+          python3 scripts/validate_compatibility.py --spec protocol.md --manifest manifest.json

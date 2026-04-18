@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/events/order-request.schema.json",
+  "title": "OrderRequest",
+  "type": "object",
+  "required": [
+    "event_type",
+    "protocol_version",
+    "event_id",
+    "timestamp",
+    "market",
+    "side",
+    "amount",
+    "price_limit"
+  ],
+  "properties": {
+    "event_type": { "type": "string", "const": "order.requested" },
+    "protocol_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "event_id": { "type": "string", "format": "uuid" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "market": { "type": "string", "pattern": "^[A-Z]{2,10}/[A-Z]{2,10}$" },
+    "side": { "type": "string", "enum": ["buy", "sell"] },
+    "amount": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$" },
+    "price_limit": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$" },
+    "client_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "client_id": { "type": "string" },
+        "trace_id": { "type": "string" }
+      }
+    }
+  },
+  "additionalProperties": false
+}
