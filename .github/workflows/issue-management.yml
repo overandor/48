@@ -1,0 +1,102 @@
+name: Issue Management
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  auto-label:
+    name: Auto-label Issues
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Auto label based on content
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.issue;
+            const body = context.payload.issue.body || '';
+            
+            // Add labels based on keywords
+            const labels = [];
+            
+            if (body.includes('bug') || body.includes('error')) {
+              labels.push('bug');
+            }
+            if (body.includes('feature') || body.includes('enhancement')) {
+              labels.push('enhancement');
+            }
+            if (body.includes('documentation') || body.includes('docs')) {
+              labels.push('documentation');
+            }
+            if (body.includes('security') || body.includes('vulnerability')) {
+              labels.push('security');
+            }
+            if (body.includes('performance') || body.includes('slow')) {
+              labels.push('performance');
+            }
+            
+            if (labels.length > 0) {
+              github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: labels
+              });
+            }
+
+  issue-assignment:
+    name: Auto-assign Issues
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assign to maintainers
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const maintainers = ['overandor'];
+            github.rest.issues.addAssignees({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              assignees: maintainers
+            });
+
+  stale-issues:
+    name: Mark Stale Issues
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          stale-issue-message: 'This issue has been inactive for 30 days. It will be closed in 7 days if no activity occurs.'
+          stale-pr-message: 'This pull request has been inactive for 30 days. It will be closed in 7 days if no activity occurs.'
+          days-before-stale: 30
+          days-before-close: 7
+          exempt-issue-labels: 'pinned,security'
+          exempt-pr-labels: 'pinned,security'
+
+  triage:
+    name: Triage Issues
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add triage label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['triage']
+            });

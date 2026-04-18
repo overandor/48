@@ -1,0 +1,79 @@
+name: Dependency Update
+
+on:
+  schedule:
+    - cron: '0 0 * * 1' # Weekly on Monday
+  workflow_dispatch:
+
+jobs:
+  update-python-dependencies:
+    name: Update Python Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pip-tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-tools pip-upgrader
+      - name: Update dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip-upgrade requirements.txt
+          fi
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: 'Update Python dependencies'
+          body: 'Automated dependency update'
+          branch: 'update/python-dependencies'
+          commit-message: 'Update Python dependencies'
+          labels: 'dependencies,automated'
+
+  update-rust-dependencies:
+    name: Update Rust Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install cargo-outdated
+        run: cargo install cargo-outdated
+      - name: Check for outdated dependencies
+        run: cargo outdated
+      - name: Update dependencies
+        run: cargo update
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: 'Update Rust dependencies'
+          body: 'Automated dependency update'
+          branch: 'update/rust-dependencies'
+          commit-message: 'Update Rust dependencies'
+          labels: 'dependencies,automated'
+
+  update-github-actions:
+    name: Update GitHub Actions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update GitHub Actions
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            execSync('npm install -g npm-check-updates');
+            // Update action versions in workflow files
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: 'Update GitHub Actions'
+          body: 'Automated GitHub Actions update'
+          branch: 'update/github-actions'
+          commit-message: 'Update GitHub Actions'
+          labels: 'dependencies,automated'
