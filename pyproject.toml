@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semantic-protocol-runtime"
+version = "0.1.0"
+description = "Terminal-native semantic protocol runtime for typed intent, explicit effects, and multi-runtime lowering."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Joseph Skrobynets" }]
+keywords = [
+  "semantic programming",
+  "terminal",
+  "runtime",
+  "llm",
+  "workflow",
+  "policy",
+  "compiler",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Interpreters",
+  "Topic :: Software Development :: Code Generators",
+]
+dependencies = []
+
+[project.optional-dependencies]
+llm = ["transformers>=4.40"]
+voice = ["SpeechRecognition>=3.10", "pyttsx3>=2.90"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+spr = "semantic_protocol_runtime:main"
+spr-voice = "semantic_protocol_voice:main"
+spr-terminal-agent = "voice_terminal_agent:main"
+spr-complete = "completefication:main"
+spr-ui = "completefication_neomorphic_ui:main"
+
+[tool.setuptools]
+py-modules = [
+  "semantic_protocol_runtime",
+  "semantic_protocol_voice",
+  "voice_terminal_agent",
+  "completefication",
+  "completefication_neomorphic_ui",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
