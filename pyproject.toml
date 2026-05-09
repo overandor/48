@@ -39,7 +39,7 @@ voice = ["SpeechRecognition>=3.10", "pyttsx3>=2.90"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
-spr = "spr_entrypoints:spr"
+spr = "spr.cli:main"
 spr-voice = "spr_entrypoints:spr_voice"
 spr-terminal-agent = "spr_entrypoints:spr_terminal_agent"
 spr-complete = "spr_entrypoints:spr_complete"
@@ -54,6 +54,8 @@ py-modules = [
   "completefication_neomorphic_ui",
   "spr_entrypoints",
 ]
+packages = ["spr"]
+package-dir = {"" = "src"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
