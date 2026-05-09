@@ -39,11 +39,11 @@ voice = ["SpeechRecognition>=3.10", "pyttsx3>=2.90"]
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
-spr = "semantic_protocol_runtime:main"
-spr-voice = "semantic_protocol_voice:main"
-spr-terminal-agent = "voice_terminal_agent:main"
-spr-complete = "completefication:main"
-spr-ui = "completefication_neomorphic_ui:main"
+spr = "spr_entrypoints:spr"
+spr-voice = "spr_entrypoints:spr_voice"
+spr-terminal-agent = "spr_entrypoints:spr_terminal_agent"
+spr-complete = "spr_entrypoints:spr_complete"
+spr-ui = "spr_entrypoints:spr_ui"
 
 [tool.setuptools]
 py-modules = [
@@ -52,6 +52,7 @@ py-modules = [
   "voice_terminal_agent",
   "completefication",
   "completefication_neomorphic_ui",
+  "spr_entrypoints",
 ]
 
 [tool.pytest.ini_options]
