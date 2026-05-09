@@ -1,0 +1,12 @@
+policy {
+  optimize: latency > cost
+  deterministic: true
+  allow database[db.main]
+  allow filesystem[*]
+  deny network[*]
+  deny shell[*]
+}
+
+users := source @db.main "select id, email, score from users"
+hot   := users -> filter score > 0.8 -> project [id, email, score]
+notify! hot @slack.ops:"#risk"
