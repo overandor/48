@@ -1,0 +1,61 @@
+{
+  "allow": {
+    "commands": [
+      ["python", "-m", "pytest", "-q"],
+      ["python", "semantic_protocol_runtime.py", "--help"],
+      ["spr", "--help"],
+      ["spr", "explain"],
+      ["spr", "run"],
+      ["spr", "compile"]
+    ],
+    "network": [],
+    "read_paths": [
+      "**/*.py",
+      "**/*.md",
+      "**/*.spr",
+      "**/*.toml",
+      "**/*.json",
+      "examples/**",
+      "docs/**",
+      "tests/**"
+    ],
+    "write_paths": [
+      "out/**",
+      "build/**",
+      ".spr_runs/**"
+    ]
+  },
+  "approval_required": [
+    "write",
+    "network",
+    "process",
+    "system"
+  ],
+  "deny": {
+    "commands": [
+      "sudo",
+      "su",
+      "dd",
+      "mkfs",
+      "shutdown",
+      "reboot",
+      "halt",
+      "poweroff",
+      "passwd",
+      "rm"
+    ],
+    "paths": [
+      ".env",
+      ".env.*",
+      "secrets/**",
+      "**/id_rsa",
+      "**/id_ed25519"
+    ],
+    "prompt_terms": [
+      "private key",
+      "password",
+      "secret key",
+      "api key"
+    ]
+  }
+}
