@@ -40,6 +40,8 @@ dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
 spr = "spr.cli:main"
+spr-policy = "spr.policy_gatekeeper:main"
+spr-proof = "spr.proof:main"
 spr-voice = "spr_entrypoints:spr_voice"
 spr-terminal-agent = "spr_entrypoints:spr_terminal_agent"
 spr-complete = "spr_entrypoints:spr_complete"
